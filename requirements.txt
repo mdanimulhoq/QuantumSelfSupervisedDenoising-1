@@ -1,8 +1,8 @@
 # N2LN-QEM Dependencies
-# Pinned versions for reproducibility
+# Colab-compatible pinned versions
 
-# Core ML
-torch==2.0.1
+# Core ML (Colab uses torch 2.2+)
+torch==2.2.0
 
 # Quantum computing
 qiskit==0.46.0
