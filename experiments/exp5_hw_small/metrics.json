@@ -1,0 +1,81 @@
+{
+  "num_circuits": 10,
+  "mean_tvd": 0.9442742187500001,
+  "std_tvd": 0.06930723186151398,
+  "mean_fidelity": 0.044599182164737454,
+  "std_fidelity": 0.06938979943199453,
+  "mean_support": 10.9,
+  "total_shots": 10000,
+  "per_circuit": [
+    {
+      "circuit_id": 0,
+      "tvd": 0.9869999999999999,
+      "fidelity": 0.006502552404068193,
+      "support_size": 10,
+      "hardware_shots": 1000
+    },
+    {
+      "circuit_id": 0,
+      "tvd": 0.9300000000000002,
+      "fidelity": 0.04842220710753838,
+      "support_size": 13,
+      "hardware_shots": 1000
+    },
+    {
+      "circuit_id": 0,
+      "tvd": 0.991,
+      "fidelity": 0.00225,
+      "support_size": 6,
+      "hardware_shots": 1000
+    },
+    {
+      "circuit_id": 0,
+      "tvd": 0.9899999999999998,
+      "fidelity": 0.007289806008408819,
+      "support_size": 10,
+      "hardware_shots": 1000
+    },
+    {
+      "circuit_id": 0,
+      "tvd": 0.961,
+      "fidelity": 0.025670957415645002,
+      "support_size": 14,
+      "hardware_shots": 1000
+    },
+    {
+      "circuit_id": 0,
+      "tvd": 0.9819999999999999,
+      "fidelity": 0.014398445535268086,
+      "support_size": 14,
+      "hardware_shots": 1000
+    },
+    {
+      "circuit_id": 0,
+      "tvd": 0.7447421875,
+      "fidelity": 0.2481418198691894,
+      "support_size": 8,
+      "hardware_shots": 1000
+    },
+    {
+      "circuit_id": 0,
+      "tvd": 0.956,
+      "fidelity": 0.02587417991287491,
+      "support_size": 11,
+      "hardware_shots": 1000
+    },
+    {
+      "circuit_id": 0,
+      "tvd": 0.9499999999999998,
+      "fidelity": 0.02345532851866827,
+      "support_size": 8,
+      "hardware_shots": 1000
+    },
+    {
+      "circuit_id": 0,
+      "tvd": 0.9509999999999998,
+      "fidelity": 0.04398652487571347,
+      "support_size": 15,
+      "hardware_shots": 1000
+    }
+  ]
+}
