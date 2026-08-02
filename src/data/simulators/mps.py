@@ -8,13 +8,14 @@ Implements TDD §7.2 Phase B.
 import numpy as np
 from typing import Dict, Optional, List, Union, Tuple
 from qiskit import QuantumCircuit
-from qiskit_aer import AerSimulator
+from qiskit_aer import Aer, AerSimulator
 from qiskit_aer.noise import NoiseModel
+from qiskit import transpile
 
 
 class MPSSimulator:
     """
-    Wrapper for Qiskit Aer MPS simulator.
+    Wrapper for Qiskit Aer MPS simulator using Aer.get_backend().
     
     Uses matrix product state representation for efficient simulation
     of low-entanglement circuits up to ~30 qubits.
@@ -32,8 +33,9 @@ class MPSSimulator:
         self.noise_model = noise_model
         self.seed = seed
         
-        # Create simulator with MPS method and max_bond_dimension directly
-        self._simulator = AerSimulator(
+        # Use Aer.get_backend with method='matrix_product_state'
+        self._backend = Aer.get_backend('qasm_simulator')
+        self._backend.set_options(
             method='matrix_product_state',
             max_bond_dimension=max_bond_dimension,
             shots=shots,
@@ -50,17 +52,19 @@ class MPSSimulator:
         shots = shots or self.shots
         noise = noise_model or self.noise_model
         
-        # Build simulator with same options
-        simulator = AerSimulator(
+        backend = Aer.get_backend('qasm_simulator')
+        backend.set_options(
             method='matrix_product_state',
             max_bond_dimension=self.max_bond_dimension,
             shots=shots,
             seed_simulator=self.seed,
         )
         if noise is not None:
-            simulator.set_options(noise_model=noise)
+            backend.set_options(noise_model=noise)
         
-        result = simulator.run(circuit).result()
+        # Transpile for better performance
+        transpiled = transpile(circuit, backend)
+        result = backend.run(transpiled).result()
         counts = result.get_counts()
         return dict(counts)
     
@@ -70,20 +74,23 @@ class MPSSimulator:
         noise_model: Optional[NoiseModel] = None,
     ) -> Dict[str, float]:
         """Get exact probabilities (no sampling)."""
-        simulator = AerSimulator(
+        backend = Aer.get_backend('statevector_simulator')
+        backend.set_options(
             method='matrix_product_state',
             max_bond_dimension=self.max_bond_dimension,
             seed_simulator=self.seed,
         )
         if noise_model is not None:
-            simulator.set_options(noise_model=noise_model)
+            backend.set_options(noise_model=noise_model)
         
-        circuit_copy = circuit.copy()
-        circuit_copy.save_probabilities()
-        result = simulator.run(circuit_copy).result()
-        probs = result.data(0)['probabilities']
+        transpiled = transpile(circuit, backend)
+        result = backend.run(transpiled).result()
+        statevector = result.get_statevector()
         
+        # Convert to probabilities
+        probs = np.abs(statevector) ** 2
         n_qubits = circuit.num_qubits
+        
         prob_dict = {}
         for i, p in enumerate(probs):
             if p > 1e-12:
@@ -106,15 +113,14 @@ class MPSSimulator:
     
     def get_state_vector(self, circuit: QuantumCircuit) -> np.ndarray:
         """Get state vector."""
-        simulator = AerSimulator(
+        backend = Aer.get_backend('statevector_simulator')
+        backend.set_options(
             method='matrix_product_state',
             max_bond_dimension=self.max_bond_dimension,
         )
-        circuit_copy = circuit.copy()
-        circuit_copy.save_statevector()
-        result = simulator.run(circuit_copy).result()
-        statevector = result.data(0)['statevector']
-        return np.array(statevector)
+        transpiled = transpile(circuit, backend)
+        result = backend.run(transpiled).result()
+        return np.array(result.get_statevector())
 
 
 def create_mps_simulator(
@@ -139,12 +145,13 @@ def compare_aer_vs_mps(
     from src.losses.distribution import total_variation_distance
     import torch
     
-    aer_sim = AerSimulator(seed_simulator=seed)
-    circuit_copy = circuit.copy()
-    circuit_copy.save_probabilities()
-    result = aer_sim.run(circuit_copy).result()
-    aer_probs = result.data(0)['probabilities']
+    # Aer exact
+    aer_sim = Aer.get_backend('statevector_simulator')
+    transpiled = transpile(circuit, aer_sim)
+    result = aer_sim.run(transpiled).result()
+    aer_probs = np.abs(result.get_statevector()) ** 2
     
+    # MPS probabilities
     mps_sim = MPSSimulator(max_bond_dimension=256, seed=seed)
     mps_probs_dict = mps_sim.get_probabilities(circuit)
     
@@ -173,19 +180,19 @@ def estimate_mps_entropy(
     max_bond_dimension: int = 256,
 ) -> Tuple[float, bool]:
     """Estimate entanglement entropy."""
-    simulator = AerSimulator(
+    backend = Aer.get_backend('statevector_simulator')
+    backend.set_options(
         method='matrix_product_state',
         max_bond_dimension=max_bond_dimension,
     )
     try:
-        circuit_copy = circuit.copy()
-        circuit_copy.save_statevector()
-        result = simulator.run(circuit_copy).result()
+        transpiled = transpile(circuit, backend)
+        result = backend.run(transpiled).result()
         if result.success:
             bond_dim = min(max_bond_dimension, 2 ** (circuit.num_qubits // 2))
             entropy = np.log2(bond_dim)
             return entropy, True
         else:
             return 0.0, False
-    except Exception:
+    except Exception as e:
         return 0.0, False
