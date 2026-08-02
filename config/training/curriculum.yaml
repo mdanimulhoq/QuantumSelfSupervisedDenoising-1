@@ -1,0 +1,16 @@
+# Curriculum override
+curriculum:
+  phase1:
+    epochs: 100
+    snd_only: true
+  phase2:
+    epochs: 150
+    snd_only: false
+    hne_enabled: true
+    hne_ramp: true
+  phase3:
+    epochs: 50
+    snd_only: false
+    hne_enabled: true
+    consist_enabled: true
+    lr_factor: 0.1
