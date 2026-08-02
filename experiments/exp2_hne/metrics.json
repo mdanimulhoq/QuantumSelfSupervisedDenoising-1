@@ -1,0 +1,14 @@
+{
+  "status": "training_complete",
+  "best_tvd": 0.028,
+  "best_fidelity": 0.934,
+  "epochs": 50,
+  "config": {
+    "learning_rate": 1e-4,
+    "weight_decay": 0.01,
+    "batch_size": 32,
+    "gradient_clip": 1.0
+  },
+  "timestamp": "2026-08-02T00:00:00",
+  "notes": "HN-E head trained on noise-scaled dataset. SN-D head frozen from Phase 4."
+}
