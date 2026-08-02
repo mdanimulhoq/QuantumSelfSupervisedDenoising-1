@@ -28,9 +28,6 @@ from src.utils.seeding import set_seed
 from src.utils.device import get_device
 from src.utils.logging import setup_logger
 
-# ============================================================
-# Unified Dataset
-# ============================================================
 
 class UnifiedDataset(Dataset):
     """Combined dataset for unified N2LN training."""
@@ -38,18 +35,17 @@ class UnifiedDataset(Dataset):
     def __init__(self, snd_data_path, hne_data_path, n_qubits=4, max_bitstrings=256):
         self.n_qubits = n_qubits
         self.max_bitstrings = max_bitstrings
+        self.snd_data = []
+        self.hne_data = []
         self._load_snd_data(snd_data_path)
         self._load_hne_data(hne_data_path)
     
     def _load_snd_data(self, data_path):
-        """Load SN-D data (low-shot -> high-shot pairs)."""
-        self.snd_data = []
         if Path(data_path).exists():
             with h5py.File(data_path, 'r') as f:
                 bitstrings = f['bitstrings'][:]
                 low_counts = f['low_counts'][:]
                 high_counts = f['high_counts'][:]
-                
                 for i in range(len(bitstrings)):
                     low_dict = self._counts_to_dict(low_counts[i], bitstrings[i])
                     high_dict = self._counts_to_dict(high_counts[i], bitstrings[i])
@@ -59,20 +55,14 @@ class UnifiedDataset(Dataset):
                         'high_counts': high_dict,
                         'bitstrings': bitstrings[i],
                     })
-        else:
-            # Dummy data
-            self.snd_data = []
     
     def _load_hne_data(self, data_path):
-        """Load HN-E data (noise-scaled pairs)."""
-        self.hne_data = []
         if Path(data_path).exists():
             with h5py.File(data_path, 'r') as f:
                 for key in f.keys():
                     if key.startswith('scale_'):
                         scale = f[key].attrs['scale']
                         counts_json = f[key]['counts'][:]
-                        
                         for counts_str in counts_json:
                             counts = json.loads(counts_str)
                             self.hne_data.append({
@@ -80,8 +70,6 @@ class UnifiedDataset(Dataset):
                                 'counts': counts,
                                 'scale': float(scale),
                             })
-        else:
-            self.hne_data = []
     
     def _counts_to_dict(self, counts, bitstrings):
         mask = counts > 0
@@ -97,7 +85,6 @@ class UnifiedDataset(Dataset):
             sample = self.snd_data[idx]
             bitstrings, counts = self._dict_to_tensors(sample['low_counts'])
             target_bitstrings, target_counts = self._dict_to_tensors(sample['high_counts'])
-            
             return {
                 'bitstrings': bitstrings,
                 'counts': counts,
@@ -110,7 +97,6 @@ class UnifiedDataset(Dataset):
             idx2 = idx - len(self.snd_data)
             sample = self.hne_data[idx2]
             bitstrings, counts = self._dict_to_tensors(sample['counts'])
-            
             return {
                 'bitstrings': bitstrings,
                 'counts': counts,
@@ -123,31 +109,23 @@ class UnifiedDataset(Dataset):
     def _dict_to_tensors(self, counts_dict):
         if not counts_dict:
             return torch.zeros(1, self.n_qubits, dtype=torch.long), torch.zeros(1, 1)
-        
         items = sorted(counts_dict.items(), key=lambda x: -x[1])
         items = items[:self.max_bitstrings]
-        
         bitstrings = []
         counts = []
         total = sum(c for _, c in items)
-        
         for bs, c in items:
             bs_tensor = [int(b) for b in bs.zfill(self.n_qubits)]
             bitstrings.append(bs_tensor)
             counts.append(c / total)
-        
         return torch.tensor(bitstrings, dtype=torch.long), torch.tensor(counts, dtype=torch.float32).unsqueeze(1)
 
-# ============================================================
-# Main Training
-# ============================================================
 
 def main():
-    print("="*60)
-    print("📊 Experiment 3: Unified N2LN - Joint Fine-Tuning")
-    print("="*60)
+    print("=" * 60)
+    print("Experiment 3: Unified N2LN - Joint Fine-Tuning")
+    print("=" * 60)
     
-    # Paths
     exp_dir = Path("experiments/exp3_unified")
     exp_dir.mkdir(parents=True, exist_ok=True)
     
@@ -155,12 +133,10 @@ def main():
     checkpoint_dir = Path("checkpoints/exp3_unified")
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     
-    # Setup
     device = get_device()
     set_seed(42)
     print(f"Device: {device}")
     
-    # Create model
     model = N2LN(
         d_model=64,
         n_heads=4,
@@ -173,34 +149,28 @@ def main():
         max_qubits=20,
     )
     
-    # Load Phase 4 checkpoint (SN-D)
     phase4_path = Path("checkpoints/exp1_snd/best_model.pt")
     if phase4_path.exists():
-        print(f"✅ Loading Phase 4 checkpoint: {phase4_path}")
+        print(f"Loading Phase 4 checkpoint: {phase4_path}")
         checkpoint = torch.load(phase4_path, map_location='cpu')
-        # Load only SN-D head weights
         model.load_state_dict(checkpoint['model_state_dict'], strict=False)
     else:
-        print(f"⚠️ Phase 4 checkpoint not found: {phase4_path}")
+        print(f"Phase 4 checkpoint not found: {phase4_path}")
     
-    # Load Phase 5 checkpoint (HN-E)
     phase5_path = Path("checkpoints/exp2_hne/best_model.pt")
     if phase5_path.exists():
-        print(f"✅ Loading Phase 5 checkpoint: {phase5_path}")
+        print(f"Loading Phase 5 checkpoint: {phase5_path}")
         checkpoint = torch.load(phase5_path, map_location='cpu')
-        # Load only HN-E head weights
         model.load_state_dict(checkpoint['model_state_dict'], strict=False)
     else:
-        print(f"⚠️ Phase 5 checkpoint not found: {phase5_path}")
+        print(f"Phase 5 checkpoint not found: {phase5_path}")
     
-    # Unfreeze all heads
     for param in model.parameters():
         param.requires_grad = True
-    print("✅ All heads unfrozen for joint fine-tuning")
+    print("All heads unfrozen for joint fine-tuning")
     
     model = model.to(device)
     
-    # Load data
     dataset = UnifiedDataset(
         data_dir / 'exp1_snd' / 'exp1_snd_train.h5',
         data_dir / 'exp2_hne' / 'exp2_hne_train.h5',
@@ -210,7 +180,6 @@ def main():
     
     print(f"Dataset: {len(dataset)} samples")
     
-    # Loss functions with consistency
     loss_fns = {
         'snd': DistributionLoss(alpha=1.0, beta=0.5, gamma=0.1),
         'hne': DistributionLoss(alpha=1.0, beta=0.5, gamma=0.1),
@@ -222,9 +191,8 @@ def main():
         ),
     }
     
-    # Training config (Phase 3: fine-tune)
     config = {
-        'learning_rate': 1e-5,  # Lower LR for fine-tuning
+        'learning_rate': 1e-5,
         'weight_decay': 0.01,
         'batch_size': 32,
         'gradient_clip': 1.0,
@@ -234,7 +202,6 @@ def main():
         'use_wandb': False,
     }
     
-    # Trainer with consistency
     trainer = Trainer(
         model=model,
         config=config,
@@ -246,10 +213,9 @@ def main():
         use_wandb=False,
     )
     
-    # Phase 3: Joint fine-tuning with consistency
-    print("\n" + "="*50)
+    print("\n" + "=" * 50)
     print("Phase 3: Joint Fine-Tuning with Consistency Loss")
-    print("="*50)
+    print("=" * 50)
     
     trainer.train(
         num_epochs=50,
@@ -258,12 +224,10 @@ def main():
         early_stopping_patience=15,
     )
     
-    # Save final checkpoint
     final_checkpoint = checkpoint_dir / 'best_model.pt'
     trainer.save_checkpoint(str(final_checkpoint))
-    print(f"✅ Model saved: {final_checkpoint}")
+    print(f"Model saved: {final_checkpoint}")
     
-    # Save metrics
     metrics = {
         'train_loss': trainer.best_val_loss,
         'epochs': trainer.current_epoch,
@@ -276,9 +240,9 @@ def main():
     
     with open(exp_dir / 'metrics.json', 'w') as f:
         json.dump(metrics, f, indent=2)
-    print(f"✅ Metrics saved: {exp_dir / 'metrics.json'}")
+    print(f"Metrics saved: {exp_dir / 'metrics.json'}")
     
-    print("\n🎉 Unified N2LN Fine-Tuning Complete!")
+    print("\nUnified N2LN Fine-Tuning Complete!")
 
 if __name__ == '__main__':
     main()
