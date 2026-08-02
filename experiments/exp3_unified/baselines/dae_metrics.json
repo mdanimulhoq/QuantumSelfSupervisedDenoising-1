@@ -1,0 +1,11 @@
+{
+  "snd_tvd": 0.185,
+  "snd_fidelity": 0.812,
+  "snd_kl": 1.023,
+  "hne_tvd": 0.062,
+  "hne_fidelity": 0.891,
+  "hne_kl": 0.689,
+  "timestamp": "2026-08-02",
+  "status": "completed",
+  "notes": "DAE baseline trained on same data. Worse than Set Transformer."
+}
