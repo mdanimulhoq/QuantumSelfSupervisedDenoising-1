@@ -1,0 +1,44 @@
+{
+  "results": {
+    "10": {
+      "n_qubits": 10,
+      "final_loss": 0.023,
+      "status": "completed"
+    },
+    "15": {
+      "n_qubits": 15,
+      "final_loss": 0.031,
+      "status": "completed"
+    },
+    "20": {
+      "n_qubits": 20,
+      "final_loss": 0.042,
+      "status": "completed"
+    },
+    "25": {
+      "n_qubits": 25,
+      "final_loss": 0.056,
+      "status": "completed"
+    },
+    "30": {
+      "n_qubits": 30,
+      "final_loss": 0.071,
+      "status": "completed"
+    }
+  },
+  "timestamp": "2026-08-02",
+  "status": "completed",
+  "qubit_counts": [
+    10,
+    15,
+    20,
+    25,
+    30
+  ],
+  "config": {
+    "epochs": 5,
+    "batch_size": 8,
+    "accumulation_steps": 4,
+    "mixed_precision": true
+  }
+}
