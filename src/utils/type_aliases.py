@@ -58,7 +58,7 @@ class Distribution:
     is_empirical: bool = False
     metadata: Dict[str, Any] = field(default_factory=dict)
     
-    def __post_init__(self) -> None:
+    def __post_init__(self):
         """Validate that probs sum to 1 (approximately)."""
         if isinstance(self.probs, torch.Tensor):
             prob_sum = self.probs.sum().item()
