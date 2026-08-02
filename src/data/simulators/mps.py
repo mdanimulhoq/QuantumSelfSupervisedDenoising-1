@@ -40,12 +40,15 @@ class MPSSimulator:
         self.seed = seed
         
         # Create simulator with MPS method
+        # Note: max_bond_dimension is set via simulator_options
         self._simulator = AerSimulator(
             method='matrix_product_state',
-            max_bond_dimension=max_bond_dimension,
             shots=shots,
             seed_simulator=seed,
-            seed_generator=seed,
+        )
+        # Set max bond dimension via simulator_options
+        self._simulator.set_options(
+            max_bond_dimension=max_bond_dimension
         )
     
     def run(
@@ -65,27 +68,22 @@ class MPSSimulator:
         Returns:
             Counts dictionary {bitstring: count}
         """
-        # Use provided or default parameters
         shots = shots or self.shots
         noise = noise_model or self.noise_model
         
         # Build simulator with parameters
         simulator = AerSimulator(
             method='matrix_product_state',
-            max_bond_dimension=self.max_bond_dimension,
             shots=shots,
             seed_simulator=self.seed,
-            seed_generator=self.seed,
         )
+        simulator.set_options(max_bond_dimension=self.max_bond_dimension)
         
-        # Add noise if provided
         if noise is not None:
             simulator.set_options(noise_model=noise)
         
-        # Transpile and run
         result = simulator.run(circuit).result()
         counts = result.get_counts()
-        
         return dict(counts)
     
     def get_probabilities(
@@ -105,28 +103,25 @@ class MPSSimulator:
         """
         simulator = AerSimulator(
             method='matrix_product_state',
-            max_bond_dimension=self.max_bond_dimension,
             seed_simulator=self.seed,
-            seed_generator=self.seed,
         )
+        simulator.set_options(max_bond_dimension=self.max_bond_dimension)
         
         if noise_model is not None:
             simulator.set_options(noise_model=noise_model)
         
-        # Add save_probabilities instruction
         circuit_copy = circuit.copy()
         circuit_copy.save_probabilities()
         
         result = simulator.run(circuit_copy).result()
         probs = result.data(0)['probabilities']
         
-        # Convert to dictionary
         n_qubits = circuit.num_qubits
         prob_dict = {}
         for i, p in enumerate(probs):
             if p > 1e-12:
                 bitstring = format(i, f'0{n_qubits}b')
-                prob_dict[bitstring] = p
+                prob_dict[bitstring] = float(p)
         
         return prob_dict
     
@@ -149,7 +144,6 @@ class MPSSimulator:
         """
         counts = self.run(circuit, shots=shots, noise_model=noise_model)
         
-        # Convert counts to samples
         samples = []
         for bitstring, count in counts.items():
             samples.extend([int(bitstring, 2)] * count)
@@ -168,8 +162,9 @@ class MPSSimulator:
         """
         simulator = AerSimulator(
             method='matrix_product_state',
-            max_bond_dimension=self.max_bond_dimension,
         )
+        simulator.set_options(max_bond_dimension=self.max_bond_dimension)
+        
         circuit_copy = circuit.copy()
         circuit_copy.save_statevector()
         
@@ -183,17 +178,7 @@ def create_mps_simulator(
     shots: int = 1000,
     seed: Optional[int] = None,
 ) -> MPSSimulator:
-    """
-    Convenience function to create an MPS simulator.
-    
-    Args:
-        max_bond_dimension: Maximum bond dimension
-        shots: Default number of shots
-        seed: Random seed
-    
-    Returns:
-        MPSSimulator instance
-    """
+    """Convenience function to create an MPS simulator."""
     return MPSSimulator(
         max_bond_dimension=max_bond_dimension,
         shots=shots,
@@ -206,32 +191,19 @@ def compare_aer_vs_mps(
     n_shots: int = 1000,
     seed: int = 42,
 ) -> Dict[str, float]:
-    """
-    Compare Aer (exact) and MPS simulator results.
-    
-    Args:
-        circuit: QuantumCircuit to compare
-        n_shots: Number of shots
-        seed: Random seed
-    
-    Returns:
-        Dictionary with TVD and fidelity between Aer and MPS results
-    """
+    """Compare Aer (exact) and MPS simulator results."""
     from src.losses.distribution import total_variation_distance
     import torch
     
-    # Aer exact
     aer_sim = AerSimulator(seed_simulator=seed)
     circuit_copy = circuit.copy()
     circuit_copy.save_probabilities()
     result = aer_sim.run(circuit_copy).result()
     aer_probs = result.data(0)['probabilities']
     
-    # MPS probabilities
     mps_sim = MPSSimulator(max_bond_dimension=256, seed=seed)
     mps_probs_dict = mps_sim.get_probabilities(circuit)
     
-    # Convert to tensors
     n_qubits = circuit.num_qubits
     mps_probs = np.zeros(2 ** n_qubits)
     for bs, p in mps_probs_dict.items():
@@ -242,8 +214,6 @@ def compare_aer_vs_mps(
     mps_tensor = torch.tensor(mps_probs, dtype=torch.float32)
     
     tvd = total_variation_distance(mps_tensor, aer_tensor).item()
-    
-    # Fidelity
     fidelity = (torch.sqrt(aer_tensor * mps_tensor).sum() ** 2).item()
     
     return {
@@ -258,30 +228,18 @@ def estimate_mps_entropy(
     circuit: QuantumCircuit,
     max_bond_dimension: int = 256,
 ) -> Tuple[float, bool]:
-    """
-    Estimate the entanglement entropy of a circuit for MPS simulation.
-    
-    Args:
-        circuit: QuantumCircuit to simulate
-        max_bond_dimension: Maximum bond dimension
-    
-    Returns:
-        Tuple of (estimated_entropy, is_simulable)
-    """
+    """Estimate the entanglement entropy of a circuit for MPS simulation."""
     simulator = AerSimulator(
         method='matrix_product_state',
-        max_bond_dimension=max_bond_dimension,
     )
+    simulator.set_options(max_bond_dimension=max_bond_dimension)
     
     try:
         circuit_copy = circuit.copy()
         circuit_copy.save_statevector()
         result = simulator.run(circuit_copy).result()
         
-        # Check if simulation succeeded
         if result.success:
-            # Estimate entropy from bond dimension
-            # Approximate: entropy ~ log2(bond_dimension)
             bond_dim = min(max_bond_dimension, 2 ** (circuit.num_qubits // 2))
             entropy = np.log2(bond_dim)
             return entropy, True
