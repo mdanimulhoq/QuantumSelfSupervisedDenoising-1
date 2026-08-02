@@ -27,7 +27,7 @@
 
 ---
 
-## Results vs Baselines
+## Raw vs SN-D Comparison
 
 | Method | Mean TVD | Improvement |
 |--------|----------|-------------|
@@ -35,6 +35,8 @@
 | **Readout Inversion** | 0.287 | 11.7% |
 | **ZNE** | 0.180 | 44.6% |
 | **SN-D (Ours)** | **0.154** | **52.6%** |
+
+**Key finding**: SN-D achieves **52.6%** TVD reduction compared to **Raw (Low-shot)**.
 
 ---
 
@@ -66,7 +68,7 @@
 
 ## Key Findings
 
-1. **Shot noise reduction**: SN-D successfully reduces shot noise from low-shot measurements, achieving 52.6% TVD reduction compared to raw.
+1. **Shot noise reduction**: SN-D successfully reduces shot noise from low-shot measurements, achieving **52.6%** TVD reduction compared to raw.
 
 2. **Qubit scaling**: Performance is consistent across 4, 6, and 8 qubits, showing good generalization.
 
