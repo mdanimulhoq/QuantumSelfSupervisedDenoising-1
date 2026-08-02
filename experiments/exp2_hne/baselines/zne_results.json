@@ -1,0 +1,11 @@
+{
+  "zne_tvd": 0.071,
+  "hne_tvd": 0.045,
+  "improvement": 36.6,
+  "method": "richardson",
+  "n_samples": 75,
+  "noise_scales_used": [1.0, 1.5, 2.0, 2.5, 3.0],
+  "timestamp": "2026-08-02",
+  "status": "completed",
+  "notes": "ZNE baseline compared against HN-E head on noise-scaled data."
+}
