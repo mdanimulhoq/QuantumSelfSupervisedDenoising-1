@@ -1,0 +1,11 @@
+low_shots: 10
+high_shots: 100
+noise_scales: [1.0, 1.5]
+circuit_families:
+  - random_non_clifford: 0.5
+  - vqe_ansatz: 0.5
+min_qubits: 2
+max_qubits: 4
+num_train_circuits: 100
+num_val_circuits: 20
+num_test_circuits: 20
