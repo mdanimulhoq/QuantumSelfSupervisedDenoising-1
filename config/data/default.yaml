@@ -1,0 +1,27 @@
+# Data collection parameters
+low_shots: 100
+high_shots: 10000
+medium_shots: 1000
+noise_scales: [1.0, 1.5, 2.0, 3.0]
+noise_model: depolarizing
+depolarizing_p: 0.01
+amp_damping_gamma: 0.01
+readout_error_p: 0.02
+
+# Circuit generation
+circuit_families:
+  - random_non_clifford: 0.4
+  - vqe_ansatz: 0.2
+  - qaoa: 0.15
+  - ghz_state: 0.1
+  - w_state: 0.1
+  - iqp_circuit: 0.05
+  - tfim_dynamics: 0.05
+
+min_qubits: 4
+max_qubits: 8
+circuit_depth_min: 2
+circuit_depth_max: 10
+num_train_circuits: 5000
+num_val_circuits: 1000
+num_test_circuits: 1000
