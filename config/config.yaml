@@ -1,0 +1,15 @@
+defaults:
+  - model: default
+  - data: default
+  - training: default
+  - _self_
+
+# Project metadata
+project_name: n2ln-qem
+seed: 42
+device: auto  # cpu/cuda
+
+# Paths
+data_dir: ./data/raw
+output_dir: ./experiments
+log_dir: ./logs
