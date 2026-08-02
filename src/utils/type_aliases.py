@@ -10,7 +10,7 @@ Notation reference (from TDD §2.1):
     - p_noisy(x): Noisy probability (hardware noise applied, infinite shots)
     - \hat{p}_S(x): Empirical distribution from S shots
 """
-from typing import Dict, List, Union, Any, Optional
+from typing import Dict, List, Union, Any, Optional, Tuple
 from dataclasses import dataclass, field
 import numpy as np
 import torch
@@ -18,7 +18,7 @@ import torch
 # ============= Type Aliases =============
 
 # A bitstring as a tuple of ints (0/1) or a string
-Bitstring = Union[str, tuple, List[int]]
+Bitstring = Union[str, Tuple[int, ...], List[int]]
 
 # Counts dictionary: mapping from bitstring to count
 # Example: {"000": 45, "001": 23, ...}
@@ -79,9 +79,9 @@ class Distribution:
         """Shannon entropy of the distribution."""
         if isinstance(self.probs, torch.Tensor):
             p = self.probs[self.probs > 1e-8]
-            return - (p * torch.log(p)).sum().item()
+            return float(- (p * torch.log(p)).sum().item())
         p = self.probs[self.probs > 1e-8]
-        return - float(np.sum(p * np.log(p)))
+        return float(-np.sum(p * np.log(p)))
     
     def to_tensor(self) -> torch.Tensor:
         """Convert probs to torch tensor."""
@@ -277,8 +277,8 @@ def is_valid_prob_vector(probs: ProbVec, eps: float = 1e-6) -> bool:
         bool: True if valid
     """
     if isinstance(probs, torch.Tensor):
-        return (probs >= -eps).all() and abs(probs.sum().item() - 1.0) < eps
-    return (probs >= -eps).all() and abs(np.sum(probs) - 1.0) < eps
+        return bool((probs >= -eps).all() and abs(probs.sum().item() - 1.0) < eps)
+    return bool((probs >= -eps).all() and abs(np.sum(probs) - 1.0) < eps)
 
 def validate_distribution(dist: Distribution) -> bool:
     """
@@ -295,11 +295,5 @@ def validate_distribution(dist: Distribution) -> bool:
     # Check sum
     if not is_valid_prob_vector(dist.probs):
         return False
-    
-    # Check bitstrings length
-    expected_len = 2 ** dist.n_qubits
-    if len(dist.bitstrings) != expected_len:
-        # For sparse distributions, this may not hold
-        pass
     
     return True
