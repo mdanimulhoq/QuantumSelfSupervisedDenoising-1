@@ -14,8 +14,21 @@ from datetime import datetime
 import numpy as np
 
 from qiskit import QuantumCircuit, transpile
-from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2 as Sampler
-from qiskit_ibm_runtime import Session
+
+# Try different import styles for compatibility
+try:
+    from qiskit_ibm_runtime import QiskitRuntimeService, Sampler
+    from qiskit_ibm_runtime import Session
+except ImportError:
+    try:
+        from qiskit_ibm_runtime import QiskitRuntimeService, Sampler
+        from qiskit_ibm_runtime import Session
+    except ImportError:
+        # Fallback for older versions
+        from qiskit_ibm_runtime import QiskitRuntimeService
+        from qiskit_ibm_runtime import Sampler
+        from qiskit_ibm_runtime import Session
+
 from qiskit_aer import AerSimulator
 
 
