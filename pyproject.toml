@@ -7,7 +7,7 @@ name = "n2ln-qem"
 version = "0.1.0"
 description = "Noise-to-Less-Noise Quantum Error Mitigation via Self-Supervised Learning"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 license = {text = "MIT"}
 authors = [
     {name = "N2LN-QEM Team", email = "your-email@example.com"}
@@ -17,7 +17,7 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.9",
     "Topic :: Scientific/Engineering :: Physics",
 ]
 
@@ -26,7 +26,7 @@ Homepage = "https://github.com/mdanimulhoq/QuantumSelfSupervisedDenoising-1"
 Repository = "https://github.com/mdanimulhoq/QuantumSelfSupervisedDenoising-1.git"
 
 [project.dependencies]
-torch = "==2.0.1"
+torch = "==2.2.0"
 qiskit = "==0.46.0"
 numpy = "==1.24.3"
 scipy = "==1.10.1"
@@ -43,7 +43,7 @@ python_functions = "test_*"
 
 [tool.black]
 line-length = 88
-target-version = ['py310']
+target-version = ['py39', 'py310']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
