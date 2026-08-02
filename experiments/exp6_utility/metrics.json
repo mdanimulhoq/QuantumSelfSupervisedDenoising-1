@@ -1,0 +1,8 @@
+{
+  "avg_tvd": 2.4292,
+  "std_tvd": 0.5758,
+  "num_circuits": 10,
+  "n_qubits": 20,
+  "shots": 100,
+  "backend": "ibm_fez"
+}
