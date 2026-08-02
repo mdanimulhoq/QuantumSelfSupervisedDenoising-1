@@ -3,7 +3,9 @@ Device utilities: auto-select CPU/CUDA/MPS.
 """
 import multiprocessing
 import torch
-from typing import Dict, Any, Union, List
+from typing import Dict, Any, Union, List, TypeVar
+
+T = TypeVar('T')
 
 def get_device(force_cpu: bool = False) -> torch.device:
     """
@@ -51,7 +53,7 @@ def get_device_info() -> Dict[str, Any]:
     
     return info
 
-def to_device(data: Union[torch.Tensor, List, Dict], device: torch.device):
+def to_device(data: Union[torch.Tensor, List, Dict, Any], device: torch.device) -> Any:
     """
     Move data to device (handles tensors, lists, dicts).
     
