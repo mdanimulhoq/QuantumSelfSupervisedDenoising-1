@@ -18,7 +18,7 @@ def setup_logger(
     use_wandb: bool = False,
     wandb_project: str = "n2ln-qem",
     wandb_entity: Optional[str] = None,
-    wandb_config: Optional[Dict] = None,
+    wandb_config: Optional[Dict[str, Any]] = None,
 ) -> logging.Logger:
     """
     Setup logger with both file and console handlers.
@@ -135,7 +135,7 @@ def load_checkpoint(
     if not filepath.exists():
         raise FileNotFoundError(f"Checkpoint not found: {filepath}")
     
-    state: Dict[str, Any] = torch.load(filepath, map_location="cpu")
+    state = torch.load(filepath, map_location="cpu")
     if logger:
         logger.info(f"Checkpoint loaded: {filepath}")
     return state
