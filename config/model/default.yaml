@@ -1,0 +1,15 @@
+# Shared model parameters
+d_model: 64
+n_heads: 4
+n_ISAB: 2
+n_SAB: 1
+d_ff: 256
+inducing_points: 16
+dropout: 0.1
+temperature: 1.0
+max_qubits: 20
+
+# Architecture selection
+use_set_transformer: true
+use_count_weighting: true
+use_positional_encoding: true
