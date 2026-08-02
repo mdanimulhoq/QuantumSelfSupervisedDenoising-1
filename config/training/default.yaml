@@ -1,0 +1,51 @@
+# Optimizer
+optimizer: adamw
+learning_rate: 3e-4
+weight_decay: 0.01
+betas: [0.9, 0.999]
+eps: 1e-8
+
+# Scheduler
+scheduler: cosine_warmup
+warmup_steps: 1000
+total_steps: 100000
+min_lr: 1e-6
+
+# Training loop
+batch_size: 64
+gradient_clip: 1.0
+early_stopping_patience: 20
+checkpoint_every: 1000
+max_epochs: 300
+
+# Loss weights
+w_snd: 1.0
+w_hne: 1.0
+w_consist: 0.3
+w_phys: 0.1
+
+# Curriculum phases
+curriculum:
+  phase1:
+    epochs: 100
+    snd_only: true
+    hne_enabled: false
+    consist_enabled: false
+  phase2:
+    epochs: 150
+    snd_only: false
+    hne_enabled: true
+    consist_enabled: false
+    hne_ramp: true
+  phase3:
+    epochs: 50
+    snd_only: false
+    hne_enabled: true
+    consist_enabled: true
+    lr_factor: 0.1
+
+# Logging
+wandb_project: n2ln-qem
+wandb_entity: null
+log_interval: 10
+eval_interval: 100
