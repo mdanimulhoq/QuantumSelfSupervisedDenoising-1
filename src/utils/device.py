@@ -1,7 +1,9 @@
 """
 Device utilities: auto-select CPU/CUDA/MPS.
 """
+import multiprocessing
 import torch
+from typing import Dict, Any, Union, List
 
 def get_device(force_cpu: bool = False) -> torch.device:
     """
@@ -25,7 +27,7 @@ def get_device(force_cpu: bool = False) -> torch.device:
     else:
         return torch.device("cpu")
 
-def get_device_info() -> dict:
+def get_device_info() -> Dict[str, Any]:
     """
     Get detailed device information.
     
@@ -33,24 +35,23 @@ def get_device_info() -> dict:
         dict: Device information including type, count, memory, etc.
     """
     device = get_device()
-    info = {
+    info: Dict[str, Any] = {
         "device": str(device),
         "device_type": device.type,
     }
     
     if device.type == "cuda":
-        info["cuda_version"] = torch.version.cuda
+        info["cuda_version"] = torch.version.cuda or "unknown"
         info["device_count"] = torch.cuda.device_count()
         info["device_name"] = torch.cuda.get_device_name(0)
         info["memory_allocated"] = torch.cuda.memory_allocated(0)
         info["memory_reserved"] = torch.cuda.memory_reserved(0)
     elif device.type == "cpu":
-        import multiprocessing
         info["cpu_count"] = multiprocessing.cpu_count()
     
     return info
 
-def to_device(data, device: torch.device):
+def to_device(data: Union[torch.Tensor, List, Dict], device: torch.device):
     """
     Move data to device (handles tensors, lists, dicts).
     
