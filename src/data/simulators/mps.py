@@ -10,7 +10,6 @@ from typing import Dict, Optional, List, Union, Tuple
 from qiskit import QuantumCircuit
 from qiskit_aer import AerSimulator
 from qiskit_aer.noise import NoiseModel
-from qiskit.result import Counts
 
 
 class MPSSimulator:
@@ -19,12 +18,6 @@ class MPSSimulator:
     
     Uses matrix product state representation for efficient simulation
     of low-entanglement circuits up to ~30 qubits.
-    
-    Attributes:
-        max_bond_dimension: Maximum bond dimension for MPS (default: 256)
-        shots: Number of shots for sampling
-        noise_model: Optional noise model
-        seed: Random seed for reproducibility
     """
     
     def __init__(
@@ -39,16 +32,12 @@ class MPSSimulator:
         self.noise_model = noise_model
         self.seed = seed
         
-        # Create simulator with MPS method
-        # Note: max_bond_dimension is set via simulator_options
+        # Create simulator with MPS method and max_bond_dimension directly
         self._simulator = AerSimulator(
             method='matrix_product_state',
+            max_bond_dimension=max_bond_dimension,
             shots=shots,
             seed_simulator=seed,
-        )
-        # Set max bond dimension via simulator_options
-        self._simulator.set_options(
-            max_bond_dimension=max_bond_dimension
         )
     
     def run(
@@ -57,28 +46,17 @@ class MPSSimulator:
         shots: Optional[int] = None,
         noise_model: Optional[NoiseModel] = None,
     ) -> Dict[str, int]:
-        """
-        Run a circuit and return counts.
-        
-        Args:
-            circuit: QuantumCircuit to simulate
-            shots: Number of shots (overrides default)
-            noise_model: Optional noise model (overrides default)
-        
-        Returns:
-            Counts dictionary {bitstring: count}
-        """
+        """Run circuit and return counts."""
         shots = shots or self.shots
         noise = noise_model or self.noise_model
         
-        # Build simulator with parameters
+        # Build simulator with same options
         simulator = AerSimulator(
             method='matrix_product_state',
+            max_bond_dimension=self.max_bond_dimension,
             shots=shots,
             seed_simulator=self.seed,
         )
-        simulator.set_options(max_bond_dimension=self.max_bond_dimension)
-        
         if noise is not None:
             simulator.set_options(noise_model=noise)
         
@@ -91,28 +69,17 @@ class MPSSimulator:
         circuit: QuantumCircuit,
         noise_model: Optional[NoiseModel] = None,
     ) -> Dict[str, float]:
-        """
-        Get exact probabilities (no sampling) from the MPS simulator.
-        
-        Args:
-            circuit: QuantumCircuit to simulate
-            noise_model: Optional noise model
-        
-        Returns:
-            Probability dictionary {bitstring: probability}
-        """
+        """Get exact probabilities (no sampling)."""
         simulator = AerSimulator(
             method='matrix_product_state',
+            max_bond_dimension=self.max_bond_dimension,
             seed_simulator=self.seed,
         )
-        simulator.set_options(max_bond_dimension=self.max_bond_dimension)
-        
         if noise_model is not None:
             simulator.set_options(noise_model=noise_model)
         
         circuit_copy = circuit.copy()
         circuit_copy.save_probabilities()
-        
         result = simulator.run(circuit_copy).result()
         probs = result.data(0)['probabilities']
         
@@ -122,7 +89,6 @@ class MPSSimulator:
             if p > 1e-12:
                 bitstring = format(i, f'0{n_qubits}b')
                 prob_dict[bitstring] = float(p)
-        
         return prob_dict
     
     def sample(
@@ -131,43 +97,21 @@ class MPSSimulator:
         shots: Optional[int] = None,
         noise_model: Optional[NoiseModel] = None,
     ) -> np.ndarray:
-        """
-        Sample bitstrings from the circuit.
-        
-        Args:
-            circuit: QuantumCircuit to simulate
-            shots: Number of shots
-            noise_model: Optional noise model
-        
-        Returns:
-            Array of sampled bitstrings as integers
-        """
+        """Sample bitstrings."""
         counts = self.run(circuit, shots=shots, noise_model=noise_model)
-        
         samples = []
         for bitstring, count in counts.items():
             samples.extend([int(bitstring, 2)] * count)
-        
         return np.array(samples)
     
     def get_state_vector(self, circuit: QuantumCircuit) -> np.ndarray:
-        """
-        Get the MPS state vector (if bond dimension allows).
-        
-        Args:
-            circuit: QuantumCircuit to simulate
-        
-        Returns:
-            State vector as numpy array
-        """
+        """Get state vector."""
         simulator = AerSimulator(
             method='matrix_product_state',
+            max_bond_dimension=self.max_bond_dimension,
         )
-        simulator.set_options(max_bond_dimension=self.max_bond_dimension)
-        
         circuit_copy = circuit.copy()
         circuit_copy.save_statevector()
-        
         result = simulator.run(circuit_copy).result()
         statevector = result.data(0)['statevector']
         return np.array(statevector)
@@ -228,17 +172,15 @@ def estimate_mps_entropy(
     circuit: QuantumCircuit,
     max_bond_dimension: int = 256,
 ) -> Tuple[float, bool]:
-    """Estimate the entanglement entropy of a circuit for MPS simulation."""
+    """Estimate entanglement entropy."""
     simulator = AerSimulator(
         method='matrix_product_state',
+        max_bond_dimension=max_bond_dimension,
     )
-    simulator.set_options(max_bond_dimension=max_bond_dimension)
-    
     try:
         circuit_copy = circuit.copy()
         circuit_copy.save_statevector()
         result = simulator.run(circuit_copy).result()
-        
         if result.success:
             bond_dim = min(max_bond_dimension, 2 ** (circuit.num_qubits // 2))
             entropy = np.log2(bond_dim)
