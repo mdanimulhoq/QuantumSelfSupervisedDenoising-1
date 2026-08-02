@@ -1,0 +1,15 @@
+{
+  "status": "training_complete",
+  "best_val_loss": 0.023,
+  "epochs": 50,
+  "config": {
+    "learning_rate": 1e-5,
+    "weight_decay": 0.01,
+    "batch_size": 32,
+    "gradient_clip": 1.0
+  },
+  "phase": "phase3",
+  "consistency_enabled": true,
+  "timestamp": "2026-08-02",
+  "notes": "Unified N2LN model with consistency loss. Both SN-D and HN-E heads fine-tuned jointly."
+}
