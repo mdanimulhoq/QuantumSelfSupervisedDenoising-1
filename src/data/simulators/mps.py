@@ -32,7 +32,7 @@ class MPSSimulator:
         self.noise_model = noise_model
         self.seed = seed
     
-    def _get_simulator(self, shots=None, noise_model=None, save_state=False):
+    def _get_simulator(self, shots=None, noise_model=None):
         """Create a new AerSimulator with MPS method."""
         simulator = AerSimulator(
             method='matrix_product_state',
@@ -125,14 +125,12 @@ def compare_aer_vs_mps(
     from src.losses.distribution import total_variation_distance
     import torch
     
-    # Aer exact
     aer_sim = AerSimulator(seed_simulator=seed)
     circuit_copy = circuit.copy()
     circuit_copy.save_probabilities()
     result = aer_sim.run(circuit_copy).result()
     aer_probs = result.data(0)['probabilities']
     
-    # MPS probabilities
     mps_sim = MPSSimulator(max_bond_dimension=256, seed=seed)
     mps_probs_dict = mps_sim.get_probabilities(circuit)
     
@@ -154,3 +152,26 @@ def compare_aer_vs_mps(
         'max_bond_dimension': 256,
         'n_qubits': n_qubits,
     }
+
+
+def estimate_mps_entropy(
+    circuit: QuantumCircuit,
+    max_bond_dimension: int = 256,
+) -> Tuple[float, bool]:
+    """Estimate entanglement entropy."""
+    try:
+        simulator = AerSimulator(
+            method='matrix_product_state',
+            max_bond_dimension=max_bond_dimension,
+        )
+        circuit_copy = circuit.copy()
+        circuit_copy.save_statevector()
+        result = simulator.run(circuit_copy).result()
+        if result.success:
+            bond_dim = min(max_bond_dimension, 2 ** (circuit.num_qubits // 2))
+            entropy = np.log2(bond_dim)
+            return entropy, True
+        else:
+            return 0.0, False
+    except Exception:
+        return 0.0, False
