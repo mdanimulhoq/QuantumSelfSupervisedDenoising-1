@@ -8,6 +8,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Any
 
+import torch
 import wandb
 
 def setup_logger(
