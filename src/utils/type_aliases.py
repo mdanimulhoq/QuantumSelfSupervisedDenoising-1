@@ -58,7 +58,7 @@ class Distribution:
     is_empirical: bool = False
     metadata: Dict[str, Any] = field(default_factory=dict)
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate that probs sum to 1 (approximately)."""
         if isinstance(self.probs, torch.Tensor):
             prob_sum = self.probs.sum().item()
@@ -287,13 +287,8 @@ def validate_distribution(dist: Distribution) -> bool:
     Checks:
         - Probabilities sum to 1
         - All probabilities >= 0
-        - Number of bitstrings matches 2^n (if full support)
     
     Returns:
         bool: True if valid
     """
-    # Check sum
-    if not is_valid_prob_vector(dist.probs):
-        return False
-    
-    return True
+    return is_valid_prob_vector(dist.probs)
