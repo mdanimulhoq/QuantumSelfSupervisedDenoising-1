@@ -13,7 +13,7 @@ class PhysicalityLoss(nn.Module):
     Physicality regularization loss.
     
     Penalizes:
-    1. Non-negativity: negative probabilities (should be zero with softmax)
+    1. Non-negativity: negative probabilities
     2. Normalization: sum of probabilities deviating from 1
     
     With softmax outputs, these are automatically satisfied, but the
@@ -27,12 +27,6 @@ class PhysicalityLoss(nn.Module):
         norm_weight: float = 1.0,
         eps: float = 1e-8,
     ):
-        """
-        Args:
-            nonneg_weight: Weight for non-negativity penalty
-            norm_weight: Weight for normalization penalty
-            eps: Small constant for numerical stability
-        """
         super().__init__()
         self.nonneg_weight = nonneg_weight
         self.norm_weight = norm_weight
@@ -48,11 +42,10 @@ class PhysicalityLoss(nn.Module):
         Returns:
             Scalar physicality loss
         """
-        # Non-negativity penalty: penalize negative values
-        # With softmax, this should be near zero, but for raw logits it matters
+        # Non-negativity penalty
         neg_penalty = F.relu(-dist).pow(2).sum(dim=-1).mean()
         
-        # Normalization penalty: penalize deviation from sum=1
+        # Normalization penalty
         sum_dist = dist.sum(dim=-1)
         norm_penalty = (sum_dist - 1.0).pow(2).mean()
         
@@ -60,15 +53,7 @@ class PhysicalityLoss(nn.Module):
         return loss
     
     def get_individual_losses(self, dist: torch.Tensor) -> dict:
-        """
-        Get individual loss components for logging.
-        
-        Args:
-            dist: (B, M) probability distribution
-        
-        Returns:
-            dict: Individual loss values
-        """
+        """Get individual loss components for logging."""
         with torch.no_grad():
             neg_penalty = F.relu(-dist).pow(2).sum(dim=-1).mean().item()
             sum_dist = dist.sum(dim=-1).mean().item()
@@ -82,43 +67,16 @@ class PhysicalityLoss(nn.Module):
 
 
 class EntropyRegularization(nn.Module):
-    """
-    Entropy regularization to prevent over-sharpening.
+    """Entropy regularization to prevent over-sharpening."""
     
-    Encourages distributions to maintain minimum entropy.
-    """
-    
-    def __init__(
-        self,
-        target_entropy: float = 0.5,
-        weight: float = 0.01,
-        eps: float = 1e-12,
-    ):
-        """
-        Args:
-            target_entropy: Minimum target entropy (in nats)
-            weight: Weight for entropy regularization
-            eps: Small constant for numerical stability
-        """
+    def __init__(self, target_entropy: float = 0.5, weight: float = 0.01, eps: float = 1e-12):
         super().__init__()
         self.target_entropy = target_entropy
         self.weight = weight
         self.eps = eps
     
     def forward(self, dist: torch.Tensor) -> torch.Tensor:
-        """
-        Compute entropy regularization loss.
-        
-        Args:
-            dist: (B, M) probability distribution
-        
-        Returns:
-            Scalar entropy regularization loss
-        """
-        # Compute entropy: -sum(p * log(p))
         dist_clamped = dist.clamp(min=self.eps)
         entropy = -(dist_clamped * dist_clamped.log()).sum(dim=-1).mean()
-        
-        # Penalize entropy below target
         loss = F.relu(self.target_entropy - entropy)
         return self.weight * loss
