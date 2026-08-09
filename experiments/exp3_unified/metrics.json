@@ -1,18 +1,8 @@
 {
-  "status": "evaluation_complete",
-  "phase": "phase3",
-  "consistency_enabled": true,
-  "evaluation": {
-    "snd": {
-      "tvd": 0.154,
-      "fidelity": 0.859,
-      "kl": 0.891
-    },
-    "hne": {
-      "tvd": 0.045,
-      "fidelity": 0.934,
-      "kl": 0.512
-    }
-  },
-  "timestamp": "2026-08-02"
+  "hne": {
+    "tvd_sn": 0.22555946905504573,
+    "tvd_hn": 0.22555994442918084,
+    "fidelity_sn": 0.9999999912760474,
+    "fidelity_hn": 0.9999998101862995
+  }
 }
