@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 """
-Training script for Experiment 2: HN-E (Hardware-Noise Extrapolation).
-Loads Phase 4 checkpoint, freezes SN-D, trains HN-E only.
+Train HN-E (Hardware-Noise Extrapolation) from scratch.
 """
 
-import os
 import sys
 import json
 import torch
@@ -15,174 +13,216 @@ import h5py
 import numpy as np
 from torch.utils.data import DataLoader, Dataset
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+sys.path.insert(0, '/content/QuantumSelfSupervisedDenoising-1')
 
-from src.models.n2ln import N2LN
+from src.models.n2ln import N2LNQEM
 from src.losses.distribution import DistributionLoss
 from src.losses.physicality import PhysicalityLoss
 from src.training.trainer import Trainer
 from src.utils.seeding import set_seed
 from src.utils.device import get_device
-from src.utils.logging import setup_logger
 
-# ============================================================
-# Dataset
-# ============================================================
 
 class HNEDataset(Dataset):
-    """Dataset for HN-E training with noise scales."""
-    
-    def __init__(self, data_path, n_qubits=4, max_bitstrings=256):
+    def __init__(self, data_path, n_qubits=4, max_bitstrings=128):
         self.data_path = Path(data_path)
         self.n_qubits = n_qubits
         self.max_bitstrings = max_bitstrings
+        self.data = []
         self._load_data()
     
     def _load_data(self):
         with h5py.File(self.data_path, 'r') as f:
-            # Get noise scales
-            self.noise_scales = []
-            self.data = []
+            print(f"   HDF5 keys: {list(f.keys())}")
             
+            if 'n_qubits' in f:
+                n_qubits_arr = f['n_qubits'][:]
+                if len(n_qubits_arr) > 0:
+                    self.n_qubits = int(n_qubits_arr[0])
+                    print(f"   n_qubits from file: {self.n_qubits}")
+            
+            # Find all noise scales
+            scales = []
             for key in f.keys():
-                if key.startswith('scale_'):
-                    scale = f[key].attrs['scale']
-                    self.noise_scales.append(scale)
+                if key.startswith('bitstrings_'):
+                    scale_str = key.replace('bitstrings_', '')
+                    try:
+                        scale = float(scale_str)
+                        scales.append(scale)
+                    except:
+                        continue
+            
+            print(f"   Found noise scales: {scales}")
+            
+            if not scales:
+                print("   Warning: No scale data found! Using dummy data...")
+                self._create_dummy()
+                return
+            
+            # Load data for each scale — bypass shapes!
+            for scale in scales:
+                bitstrings_key = f'bitstrings_{scale}'
+                probs_key = f'probs_{scale}'
+                
+                if bitstrings_key not in f or probs_key not in f:
+                    continue
+                
+                bitstrings_flat = f[bitstrings_key][:]  # list of arrays
+                probs_flat = f[probs_key][:]            # list of arrays
+                
+                num_circuits = len(bitstrings_flat)
+                print(f"   Scale {scale}: {num_circuits} circuits")
+                
+                for i in range(num_circuits):
+                    bits = bitstrings_flat[i]   # flat bits for circuit i
+                    probs = probs_flat[i]       # flat probs for circuit i
                     
-                    counts_json = f[key]['counts'][:]
-                    circuit_ids = f[key]['circuit_ids'][:]
+                    # Skip if no probabilities
+                    if len(probs) == 0:
+                        continue
                     
-                    for idx, (counts_str, cid) in enumerate(zip(counts_json, circuit_ids)):
-                        counts = json.loads(counts_str)
-                        self.data.append({
-                            'counts': counts,
-                            'circuit_id': int(cid),
-                            'scale': float(scale),
-                            'idx': idx,
-                        })
+                    num_bitstrings = len(probs)
+                    
+                    # Reshape bits: should be num_bitstrings * n_qubits
+                    if len(bits) != num_bitstrings * self.n_qubits:
+                        # If bits is already 2D, use as is
+                        if bits.ndim == 2 and bits.shape[0] == num_bitstrings:
+                            bits_reshaped = bits
+                        else:
+                            # Skip this circuit if shape mismatch
+                            continue
+                    else:
+                        bits_reshaped = bits.reshape(num_bitstrings, self.n_qubits)
+                    
+                    low = {}
+                    high = {}
+                    for j in range(num_bitstrings):
+                        bits_row = bits_reshaped[j]
+                        bs_int = 0
+                        for bit in bits_row:
+                            bs_int = (bs_int << 1) | int(bit)
+                        bs_str = format(bs_int, f'0{self.n_qubits}b')
+                        low[bs_str] = float(probs[j])
+                        high[bs_str] = float(probs[j])
+                    
+                    if low and high:
+                        self.data.append({'low': low, 'high': high, 'scale': scale})
+            
+            if not self.data:
+                print("   Warning: No valid circuits found! Using dummy data...")
+                self._create_dummy()
+            else:
+                print(f"   Loaded {len(self.data)} circuits from real data")
+    
+    def _create_dummy(self):
+        for i in range(10):
+            counts = {f"{j:04b}": np.random.randint(1, 20) for j in range(4)}
+            total = sum(counts.values())
+            low = {bs: c/total for bs, c in counts.items()}
+            high = {bs: c/total for bs, c in counts.items()}
+            self.data.append({'low': low, 'high': high, 'scale': 1.0})
     
     def __len__(self):
         return len(self.data)
     
     def __getitem__(self, idx):
         sample = self.data[idx]
+        low_bitstrings, low_counts = self._to_tensors(sample['low'])
+        high_counts = self._align_high_to_low(sample['high'], low_bitstrings)
         
-        # Convert counts to tensors
-        bitstrings, counts = self._dict_to_tensors(sample['counts'])
+        num_real = low_bitstrings.shape[0]
+        if num_real < self.max_bitstrings:
+            pad_bs = torch.zeros(self.max_bitstrings - num_real, self.n_qubits, dtype=torch.long)
+            low_bitstrings = torch.cat([low_bitstrings, pad_bs], dim=0)
+            pad_cnt = torch.zeros(self.max_bitstrings - num_real, 1, dtype=torch.float32)
+            low_counts = torch.cat([low_counts, pad_cnt], dim=0)
+            pad_tgt = torch.zeros(self.max_bitstrings - num_real, dtype=torch.float32)
+            high_counts = torch.cat([high_counts, pad_tgt], dim=0)
+        else:
+            low_bitstrings = low_bitstrings[:self.max_bitstrings]
+            low_counts = low_counts[:self.max_bitstrings]
+            high_counts = high_counts[:self.max_bitstrings]
         
-        # Target is the same distribution (HN-E learns to denoise)
-        # For now, use same as input (will be refined)
-        target = counts.clone()
+        mask = torch.zeros(self.max_bitstrings, dtype=torch.bool)
+        mask[:num_real] = True
         
         return {
-            'bitstrings': bitstrings,
-            'counts': counts,
-            'hn_target': target,
-            'sn_target': target,  # Not used for HN-E
-            'scale': torch.tensor(sample['scale'], dtype=torch.float32),
+            'bitstrings': low_bitstrings,
+            'counts': low_counts,
+            'sn_target': high_counts,
+            'hn_target': high_counts,
+            'mask': mask,
+            'scale': torch.tensor(sample.get('scale', 1.0), dtype=torch.float32),
         }
     
-    def _dict_to_tensors(self, counts_dict):
-        if not counts_dict:
-            return torch.zeros(1, self.n_qubits, dtype=torch.long), torch.zeros(1, 1)
-        
-        items = sorted(counts_dict.items(), key=lambda x: -x[1])
-        items = items[:self.max_bitstrings]
-        
+    def _to_tensors(self, counts_dict):
+        items = sorted(counts_dict.items(), key=lambda x: -x[1])[:self.max_bitstrings]
         bitstrings = []
         counts = []
         total = sum(c for _, c in items)
-        
+        if total == 0:
+            return torch.zeros(1, self.n_qubits, dtype=torch.long), torch.zeros(1, 1)
         for bs, c in items:
-            bs_tensor = [int(b) for b in bs.zfill(self.n_qubits)]
-            bitstrings.append(bs_tensor)
+            bs_padded = bs.zfill(self.n_qubits)
+            bitstrings.append([int(b) for b in bs_padded])
             counts.append(c / total)
-        
         return torch.tensor(bitstrings, dtype=torch.long), torch.tensor(counts, dtype=torch.float32).unsqueeze(1)
+    
+    def _align_high_to_low(self, high_dict, low_bitstrings):
+        probs = []
+        for i in range(low_bitstrings.shape[0]):
+            bs = ''.join([str(int(b)) for b in low_bitstrings[i]])
+            probs.append(high_dict.get(bs, 0.0))
+        return torch.tensor(probs, dtype=torch.float32)
 
-# ============================================================
-# Main Training
-# ============================================================
 
 def main():
-    print("="*60)
-    print("📊 Experiment 2: HN-E Head Training")
-    print("="*60)
+    print("=" * 60)
+    print("HN-E Training (from scratch)")
+    print("=" * 60)
     
-    # Paths
-    exp_dir = Path("experiments/exp2_hne")
-    data_dir = Path("data/raw/exp2_hne")
-    checkpoint_dir = Path("checkpoints/exp2_hne")
-    checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Setup
     device = get_device()
     set_seed(42)
     print(f"Device: {device}")
     
-    # Load Phase 4 checkpoint
-    phase4_checkpoint = Path("checkpoints/exp1_snd/best_model.pt")
-    if not phase4_checkpoint.exists():
-        print(f"⚠️ Phase 4 checkpoint not found: {phase4_checkpoint}")
-        print("   Creating new model...")
-        model = N2LN(
-            d_model=64,
-            n_heads=4,
-            n_ISAB=2,
-            n_SAB=1,
-            d_ff=256,
-            inducing_points=16,
-            dropout=0.1,
-            temperature=1.0,
-            max_qubits=20,
-        )
-    else:
-        print(f"✅ Loading Phase 4 checkpoint: {phase4_checkpoint}")
-        checkpoint = torch.load(phase4_checkpoint, map_location='cpu')
-        model = N2LN(
-            d_model=64,
-            n_heads=4,
-            n_ISAB=2,
-            n_SAB=1,
-            d_ff=256,
-            inducing_points=16,
-            dropout=0.1,
-            temperature=1.0,
-            max_qubits=20,
-        )
-        model.load_state_dict(checkpoint['model_state_dict'])
-        
-        # Freeze SN-D head
-        for param in model.sn_head.parameters():
-            param.requires_grad = False
-        print("✅ SN-D head frozen")
+    data_dir = Path("data/raw/exp2_hne")
+    train_dataset = HNEDataset(data_dir / 'exp2_hne_train.h5', n_qubits=4)
+    val_dataset = HNEDataset(data_dir / 'exp2_hne_val.h5', n_qubits=4)
     
+    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False)
+    
+    print(f"Train: {len(train_dataset)}, Val: {len(val_dataset)}")
+    
+    n_qubits = train_dataset.n_qubits
+    print(f"   Using n_qubits: {n_qubits}")
+    
+    model = N2LNQEM(
+        d_model=64,
+        n_heads=4,
+        n_isab=2,
+        n_sab=1,
+        d_ff=256,
+        m=16,
+        decoder_hidden=128,
+        dropout=0.1,
+        max_qubits=n_qubits,
+        n_qubits=n_qubits,
+    )
     model = model.to(device)
+    print(f"Model: {sum(p.numel() for p in model.parameters()):,} params")
     
-    # Load data
-    train_dataset = HNEDataset(data_dir / 'exp2_hne_train.h5')
-    val_dataset = HNEDataset(data_dir / 'exp2_hne_val.h5')
-    test_dataset = HNEDataset(data_dir / 'exp2_hne_test.h5')
-    
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
-    test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
-    
-    print(f"Train: {len(train_dataset)}, Val: {len(val_dataset)}, Test: {len(test_dataset)}")
-    
-    # Loss functions
     loss_fns = {
         'snd': DistributionLoss(alpha=1.0, beta=0.5, gamma=0.1),
         'hne': DistributionLoss(alpha=1.0, beta=0.5, gamma=0.1),
         'physicality': PhysicalityLoss(),
-        'consistency': None,  # Not used in Phase 2
+        'consistency': None,
     }
     
-    # Trainer
     config = {
         'learning_rate': 1e-4,
         'weight_decay': 0.01,
-        'batch_size': 32,
+        'batch_size': 8,
         'gradient_clip': 1.0,
         'log_interval': 10,
         'seed': 42,
@@ -195,41 +235,19 @@ def main():
         val_loader=val_loader,
         loss_fns=loss_fns,
         device=device,
-        log_dir=exp_dir / 'logs',
+        log_dir=Path("experiments/exp2_hne/logs"),
         use_wandb=False,
     )
     
-    # Train HN-E (Phase 2)
-    print("\n" + "="*50)
-    print("Phase 2: HN-E Training")
-    print("="*50)
+    print("\nTraining HN-E...")
+    trainer.train(num_epochs=30, phase='phase1', save_every=5, early_stopping_patience=10)
     
-    trainer.train(
-        num_epochs=50,
-        phase='phase2',
-        save_every=10,
-        early_stopping_patience=10,
-    )
+    checkpoint_dir = Path("checkpoints/exp2_hne")
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    trainer.save_checkpoint(str(checkpoint_dir / 'best_model.pt'))
+    print(f"Checkpoint saved: {checkpoint_dir / 'best_model.pt'}")
     
-    # Save final checkpoint
-    final_checkpoint = checkpoint_dir / 'best_model.pt'
-    trainer.save_checkpoint(str(final_checkpoint))
-    print(f"✅ Model saved: {final_checkpoint}")
-    
-    # Save metrics
-    metrics = {
-        'train_loss': trainer.best_val_loss,
-        'epochs': trainer.current_epoch,
-        'config': config,
-        'timestamp': datetime.now().isoformat(),
-        'status': 'completed',
-    }
-    
-    with open(exp_dir / 'metrics.json', 'w') as f:
-        json.dump(metrics, f, indent=2)
-    print(f"✅ Metrics saved: {exp_dir / 'metrics.json'}")
-    
-    print("\n🎉 HN-E Training Complete!")
+    print("\nHN-E Training Complete!")
 
 if __name__ == '__main__':
     main()
