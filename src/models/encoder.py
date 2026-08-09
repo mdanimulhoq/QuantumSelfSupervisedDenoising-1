@@ -152,7 +152,7 @@ class BitstringEncoder(nn.Module):
         mask_expanded = mask.unsqueeze(-1)  # (B, M, 1)
         embeddings = embeddings * mask_expanded.float()
         
-        return embeddings, mask
+        return embeddings
 
 
 class BitstringEncoderWithCounts(nn.Module):
@@ -195,4 +195,4 @@ class BitstringEncoderWithCounts(nn.Module):
         count_emb = self.count_proj(counts)
         embeddings = embeddings + count_emb
         
-        return embeddings, mask
+        return embeddings
